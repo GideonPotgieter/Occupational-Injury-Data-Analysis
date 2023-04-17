@@ -1,6 +1,6 @@
 ---
 title: "Final Project: Draft 1"
-author: "Your Name"
+author: "Gideon Potgieter"
 date: "April 2, 2023"
 output: html_document
 ---
@@ -10,38 +10,97 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r libraries, include=FALSE}
+install.packages("rlang")
 library(tidyverse)
+library(knitr)  
+library(ggpubr)
+library(ggrepel)
+library(tidyverse)
+library(kableExtra)
+library(survey)
+library(haven)
+library(broom)
+library(plotrix)
+library(patchwork)
+library(pander)
+
+
 # any other libraries you want to load
 ```
 
 ### Question of interest
 
-This is where you will describe your question of interest.  Give background information to your question if necessary.
+What risk factors are associated with experiencing an occupational injury/illness?
 
 ### Data
 
-Briefly describe the data you plan to use to answer the question of interest.  Provide links to any publicly available datasets. You can directly link to websites where your data is by including links in the following way: Here is the link to the [Johns Hopkins University homepage](https://www.jhu.edu/){target="_blank"}.
+For this project, I am using the Quality of Worklife (QWL) survey data, which is a part of the General Social Survey questionnaire for adults who have been employed in the United States in the past year. Here is the link to the [The General Social Survey website](https://gss.norc.org/Pages/quality-of-worklife.aspx){target="_blank"}.
 
 Download your data and upload it into the data folder in this project. That way when we clone your repository for grading, we can knit your file.
 
 Note: If you are using data that can't be shared publicly, please reach out to us to discuss the best way to work with your data. Do NOT upload your data to Github!
 
-```{r data, include=FALSE}
-# eventually you will include code to load your data here
+```{r data, include = FALSE}
+dat <- read_sav('data/NIOSH-QWL.sav')
+                
+dat2014 <- dat %>% filter(year == "2014")
+
+drop_na(dat2014)
+
+dat2014 <- dat2014 %>% mutate(occ2=factor(occ2, levels=c(1, 2, 3, 4, 5), labels=c('White Collar', 'Blue Collar','Service', 'Farming/Fishing/Forestry', 'Military')), 
+                            nrace=factor(nrace, levels=c(0, 1, 2, 3, 4, 5), 
+                      labels=c('N/A', 'White', 
+                              'Black/African American', 
+                              'American/Alaska Native', 
+                              'Asian/Pacific Islander', 'Hispanic')))
+
+```
+
+```{r}
+Table_1 <- dat2014 %>%
+  count(wkinjury, occ2) %>%
+  mutate(prop = n/sum(n)) %>%
+   mutate(percent =round(n/sum(n)*100,1))
+
+Table_1 %>%
+  filter(wkinjury == 1) %>%
+  ggplot() +
+  geom_bar(mapping = aes(x = occ2, y = percent), stat = "identity") + 
+   geom_text(aes(x = occ2, y = percent, label = percent)) +
+  labs(y= "",
+       x= "",
+       title= "")
+
+Table_2 <- dat2014 %>%
+  count(wkinjury, nrace) %>%
+  mutate(prop = n/sum(n)) %>%
+   mutate(percent =round(n/sum(n)*100,1))
+
+Table_2 %>%
+  filter(wkinjury == 1) %>%
+  ggplot() +
+  geom_bar(mapping = aes(x = nrace, y = percent), stat = "identity") + 
+   geom_text(aes(x = nrace, y = percent, label = percent)) +
+  labs(y= "",
+       x= "",
+       title= "")
 ```
 
 ### Variables of interest
 
-* **Outcome variable:**
-* **Primary predictor variable:**
-* **Possible confounders:**
-* **Potential effect modifiers:**
+* **Outcome variable: Whether respondent had Occupational Injuries in the past year (wkinjury)**
+* **Primary predictor variable: Industry/job type, Race, Income**
+* **Possible confounders: Age, Sex**
+* **Potential effect modifiers: Age, Sex**
 
 ### Directed acyclic graph (DAG)
 
 ### Analysis plan
 
+Logistic regression would make sense as the outcome is simply whether or not the respondent had experienced an occupational injury in the past year.
+
 What type of basic analysis could you use to address your question of interest?  Linear regression because your outcome is continuous?  Logistic regression because your outcome is binary?  How will you control for confounding in your analysis?  This section may change and be updated later as you continue with your analysis.
+
 
 
 ```{r submission_instructions, include=FALSE, eval=FALSE}
