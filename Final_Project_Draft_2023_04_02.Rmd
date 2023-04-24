@@ -23,14 +23,13 @@ library(broom)
 library(plotrix)
 library(patchwork)
 library(pander)
+library(dagitty)
 
-
-# any other libraries you want to load
 ```
 
 ### Question of interest
 
-What risk factors are associated with experiencing an occupational injury/illness?
+What risk factors are associated with experiencing an occupational injury?
 
 ### Data
 
@@ -45,45 +44,54 @@ dat <- read_sav('data/NIOSH-QWL.sav')
                 
 dat2014 <- dat %>% filter(year == "2014")
 
-drop_na(dat2014)
+dat2014 <- dat2014 %>% select(occupation = occ2, sex, age, safetywk, safefrst, teamsafe, safehlth, wkinjury, wtssnr, health)
 
-dat2014 <- dat2014 %>% mutate(occ2=factor(occ2, levels=c(1, 2, 3, 4, 5), labels=c('White Collar', 'Blue Collar','Service', 'Farming/Fishing/Forestry', 'Military')), 
-                            nrace=factor(nrace, levels=c(0, 1, 2, 3, 4, 5), 
-                      labels=c('N/A', 'White', 
-                              'Black/African American', 
-                              'American/Alaska Native', 
-                              'Asian/Pacific Islander', 'Hispanic')))
+dat2014 <- drop_na(dat2014)
 
+dat2014 <- dat2014 %>% 
+  mutate(occupation=factor(occupation, levels=c(1, 2, 3, 4, 5), labels=c('White Collar', 'Blue Collar','Service', 'Farming/Fishing/Forestry', 'Military')),
+         safetywk=factor(safetywk, levels=c(1, 2, 3, 4), labels=c('Strongly Agree', 'Agree', 'Disagree', 'Strongly Disagree'))) 
+  
+
+# Survey Weights design                        
+work_injury_design <- svydesign(
+  id = ~1,
+  weights = ~dat2014$wtssnr,
+  data = dat2014
+) 
+WI_design_nona <- subset(work_injury_design, complete.cases(dat2014))
 ```
 
 ```{r}
 Table_1 <- dat2014 %>%
-  count(wkinjury, occ2) %>%
+  count(wkinjury, occupation) %>%
+  group_by(occupation) %>%
   mutate(prop = n/sum(n)) %>%
    mutate(percent =round(n/sum(n)*100,1))
 
 Table_1 %>%
   filter(wkinjury == 1) %>%
   ggplot() +
-  geom_bar(mapping = aes(x = occ2, y = percent), stat = "identity") + 
-   geom_text(aes(x = occ2, y = percent, label = percent)) +
-  labs(y= "",
-       x= "",
-       title= "")
+  geom_bar(mapping = aes(x = occupation, y = percent), stat = "identity") + 
+   geom_text(aes(x = occupation, y = percent, label = percent)) +
+  labs(y= "% Injured",
+       x= "Occupation",
+       title= "% of workers who had an occupational injury in the past year")
 
 Table_2 <- dat2014 %>%
-  count(wkinjury, nrace) %>%
+  count(wkinjury, safetywk) %>%
+  group_by(safetywk) %>%
   mutate(prop = n/sum(n)) %>%
    mutate(percent =round(n/sum(n)*100,1))
 
 Table_2 %>%
   filter(wkinjury == 1) %>%
   ggplot() +
-  geom_bar(mapping = aes(x = nrace, y = percent), stat = "identity") + 
-   geom_text(aes(x = nrace, y = percent, label = percent)) +
-  labs(y= "",
-       x= "",
-       title= "")
+  geom_bar(mapping = aes(x = safetywk, y = percent), stat = "identity") + 
+   geom_text(aes(x = safetywk, y = percent, label = percent)) +
+  labs(y= "% Injured",
+       x= "Answer to: Does worker safety take high priority at my job?",
+       title= "% of workers who had an occupational injury by perception of workplace safety")
 ```
 
 ### Variables of interest
@@ -94,10 +102,43 @@ Table_2 %>%
 * **Potential effect modifiers: Age, Sex**
 
 ### Directed acyclic graph (DAG)
+```{r}
+
+```
 
 ### Analysis plan
 
 Logistic regression would make sense as the outcome is simply whether or not the respondent had experienced an occupational injury in the past year.
+```{r}
+#Survey weighted logistic regression
+
+g1 <- svyglm(wkinjury ~ 
+               age + sex + occupation + health,
+              family = quasibinomial(link = 'logit'), 
+             design = work_injury_design)
+
+g1 %>%
+  tidy(exponentiate = TRUE, conf.int = TRUE, conf.level = 0.96) %>%
+  filter(term != "(Intercept)") %>%
+  mutate(conf.int = paste0("(", round(conf.low,2), ", ", round(conf.high,2), ")")) %>%
+  select(Term = term, OR = estimate, `p-value` = p.value, `95% CI` = conf.int) %>%
+  mutate(Term=c("Age", "Sex", "Blue Collar", "Service", "Fishing/Farming/Forestry", "Military", "Overall Health"))%>%
+  pander(digits = 2)
+
+g2 <- svyglm(wkinjury ~ 
+               age + sex + safetywk + health,
+              family = quasibinomial(link = 'logit'), 
+             design = work_injury_design)
+
+g2 %>%
+  tidy(exponentiate = TRUE, conf.int = TRUE, conf.level = 0.96) %>%
+  filter(term != "(Intercept)") %>%
+  mutate(conf.int = paste0("(", round(conf.low,2), ", ", round(conf.high,2), ")")) %>%
+  select(Term = term, OR = estimate, `p-value` = p.value, `95% CI` = conf.int) %>%
+  mutate(Term=c("Age", "Sex", "agree", "disagree", "strongly disagree", "Hours worked"))%>%
+  pander(digits = 2)
+
+```
 
 What type of basic analysis could you use to address your question of interest?  Linear regression because your outcome is continuous?  Logistic regression because your outcome is binary?  How will you control for confounding in your analysis?  This section may change and be updated later as you continue with your analysis.
 
