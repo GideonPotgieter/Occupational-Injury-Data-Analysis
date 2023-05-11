@@ -1,7 +1,7 @@
 ---
-title: "Final Project: Draft 1"
+title: "Final Project: Occupational Injuries"
 author: "Gideon Potgieter"
-date: "April 2, 2023"
+date: "May 10, 2023"
 output: html_document
 ---
 
@@ -10,7 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r libraries, include=FALSE}
-install.packages("rlang")
+library(rlang)
 library(tidyverse)
 library(knitr)  
 library(ggpubr)
@@ -23,48 +23,48 @@ library(broom)
 library(plotrix)
 library(patchwork)
 library(pander)
-library(dagitty)
+library(forcats)
 
 ```
 
-### Question of interest
+### Question of interest: What risk factors are associated with experiencing an occupational injury?
 
-What risk factors are associated with experiencing an occupational injury?
+Technology, policies, and laws in the American workplace are constantly changing, so finding new ways to protect worker safety is important. This question of interest aims to identify risk factors associated with experiencing work injuries in order to support the evolving needs of occupational health and safety.
 
 ### Data
 
-For this project, I am using the Quality of Worklife (QWL) survey data, which is a part of the General Social Survey questionnaire for adults who have been employed in the United States in the past year. Here is the link to the [The General Social Survey website](https://gss.norc.org/Pages/quality-of-worklife.aspx){target="_blank"}.
+For this project, Quality of Worklife (QWL) survey data is used, which is a part of the General Social Survey questionnaire for adults who have been employed in the United States in the past year. Here is a link to the [The General Social Survey website](https://gss.norc.org/Pages/quality-of-worklife.aspx){target="_blank"}, which contains more information. The survey year used for this project is 2014.
 
-Download your data and upload it into the data folder in this project. That way when we clone your repository for grading, we can knit your file.
+The variables from this data set we are interested in are occupation, sex, age, weekly work hours, and wkinjury. The "wkinjury" variable answers whether the each survey respondent has experienced an injury at work in the last year, and will be used as the outcome variable. The primary predictor variable is occupation, as initial data exploration showed that type of occupation might affect the odds of experiencing an injury at work. Sex, age, and weekly work hours are included as potential confounders. The relationship between these variables is shown below.
 
-Note: If you are using data that can't be shared publicly, please reach out to us to discuss the best way to work with your data. Do NOT upload your data to Github!
+![](/cloud/project/data/HDAP DAG.png)
+
+### Data Visualization
+To visualize how occupation might affect occupational injury status, a bar chart was created. The plot was grouped by sex in order to also begin to understand how sex might be a confounding variable.
 
 ```{r data, include = FALSE}
 dat <- read_sav('data/NIOSH-QWL.sav')
                 
-dat2014 <- dat %>% filter(year == "2014")
+dat2014 <- dat %>% filter(year == 2014)
 
-dat2014 <- dat2014 %>% select(occupation = occ2, sex, age, safetywk, safefrst, teamsafe, safehlth, wkinjury, wtssnr, health)
+dat2014 <- dat2014 %>% select(year, occupation = occ2, sex, age, wkinjury, wtssnr, hrs1)
 
 dat2014 <- drop_na(dat2014)
 
 dat2014 <- dat2014 %>% 
-  mutate(occupation=factor(occupation, levels=c(1, 2, 3, 4, 5), labels=c('White Collar', 'Blue Collar','Service', 'Farming/Fishing/Forestry', 'Military')),
-         safetywk=factor(safetywk, levels=c(1, 2, 3, 4), labels=c('Strongly Agree', 'Agree', 'Disagree', 'Strongly Disagree'))) 
-  
-
+  mutate(occupation=factor(occupation, levels=c(1, 2, 3, 4, 5), labels=c('White Collar', 'Blue Collar','Service', 'Farming/Fishing/Forestry', 'Military')), occupation = fct_collapse(occupation, 'Blue Collar' = c('Blue Collar', 'Farming/Fishing/Forestry')), sex=factor(sex, levels=c(1, 2), labels=c('Male', 'Female')))
+          
 # Survey Weights design                        
 work_injury_design <- svydesign(
   id = ~1,
   weights = ~dat2014$wtssnr,
   data = dat2014
-) 
-WI_design_nona <- subset(work_injury_design, complete.cases(dat2014))
+)
 ```
 
-```{r}
+```{r, echo = FALSE}
 Table_1 <- dat2014 %>%
-  count(wkinjury, occupation) %>%
+  count(wkinjury, occupation, sex) %>%
   group_by(occupation) %>%
   mutate(prop = n/sum(n)) %>%
    mutate(percent =round(n/sum(n)*100,1))
@@ -74,46 +74,24 @@ Table_1 %>%
   ggplot() +
   geom_bar(mapping = aes(x = occupation, y = percent), stat = "identity") + 
    geom_text(aes(x = occupation, y = percent, label = percent)) +
+  facet_wrap(~sex) +
   labs(y= "% Injured",
        x= "Occupation",
-       title= "% of workers who had an occupational injury in the past year")
-
-Table_2 <- dat2014 %>%
-  count(wkinjury, safetywk) %>%
-  group_by(safetywk) %>%
-  mutate(prop = n/sum(n)) %>%
-   mutate(percent =round(n/sum(n)*100,1))
-
-Table_2 %>%
-  filter(wkinjury == 1) %>%
-  ggplot() +
-  geom_bar(mapping = aes(x = safetywk, y = percent), stat = "identity") + 
-   geom_text(aes(x = safetywk, y = percent, label = percent)) +
-  labs(y= "% Injured",
-       x= "Answer to: Does worker safety take high priority at my job?",
-       title= "% of workers who had an occupational injury by perception of workplace safety")
-```
-
-### Variables of interest
-
-* **Outcome variable: Whether respondent had Occupational Injuries in the past year (wkinjury)**
-* **Primary predictor variable: Industry/job type, Race, Income**
-* **Possible confounders: Age, Sex**
-* **Potential effect modifiers: Age, Sex**
-
-### Directed acyclic graph (DAG)
-```{r}
+       title= "% of Workers who had an Occupational Injury in the Past Year")
 
 ```
 
-### Analysis plan
+This visual indicates that men may be more likely to be injured at work than women, meaning it might be a confounder. White Collar occupations had low proportions of injuries for both men and women at 3% and 2.5% respectively, while Military occupations had the highest proportion of injuries among men at 16.7%. However, the sample size for the Military occupation was very small, and there were no injured women who worked in the Military in the data set. 
 
-Logistic regression would make sense as the outcome is simply whether or not the respondent had experienced an occupational injury in the past year.
-```{r}
+### Logistic Regression
+
+To determine if occupation does in fact statistically affect the odds of experiencing an occupational injury, a survey weighted logistic regression was conducted. The survey weights provided in the data set were used. Age, sex, and hours worked per week were accounted for as confounding variables in the regression, and White Collar jobs were considered the baseline occupation for comparison.
+
+```{r, echo = FALSE}
 #Survey weighted logistic regression
 
 g1 <- svyglm(wkinjury ~ 
-               age + sex + occupation + health,
+               age + sex + occupation + hrs1,
               family = quasibinomial(link = 'logit'), 
              design = work_injury_design)
 
@@ -122,26 +100,16 @@ g1 %>%
   filter(term != "(Intercept)") %>%
   mutate(conf.int = paste0("(", round(conf.low,2), ", ", round(conf.high,2), ")")) %>%
   select(Term = term, OR = estimate, `p-value` = p.value, `95% CI` = conf.int) %>%
-  mutate(Term=c("Age", "Sex", "Blue Collar", "Service", "Fishing/Farming/Forestry", "Military", "Overall Health"))%>%
-  pander(digits = 2)
-
-g2 <- svyglm(wkinjury ~ 
-               age + sex + safetywk + health,
-              family = quasibinomial(link = 'logit'), 
-             design = work_injury_design)
-
-g2 %>%
-  tidy(exponentiate = TRUE, conf.int = TRUE, conf.level = 0.96) %>%
-  filter(term != "(Intercept)") %>%
-  mutate(conf.int = paste0("(", round(conf.low,2), ", ", round(conf.high,2), ")")) %>%
-  select(Term = term, OR = estimate, `p-value` = p.value, `95% CI` = conf.int) %>%
-  mutate(Term=c("Age", "Sex", "agree", "disagree", "strongly disagree", "Hours worked"))%>%
+  mutate(Term=c("Age", "Sex", "Blue Collar", "Service", "Military", "Hours"))%>%
   pander(digits = 2)
 
 ```
 
-What type of basic analysis could you use to address your question of interest?  Linear regression because your outcome is continuous?  Logistic regression because your outcome is binary?  How will you control for confounding in your analysis?  This section may change and be updated later as you continue with your analysis.
+### Discussion
 
+The results of the logistic regression indicate that certain occupations may be risk factors associated with experiencing an occupational injury. Holding age, sex, and # of work hours per week constant, people with blue collar professions had 2 times greater odds of experiencing an injury at work than people with white collar professions, with a 95% confidence interval of (1.11, 3.62) and a statistically significant p-value of 0.016. Service professions had 3.5 times greater odds of occupational injuries with a 95% CI of (1.73, 7.11) and a p-value of 0.00027. Those with Military jobs had 3.5 times the odds of injury, but this result was not statistically significant (P = 0.49). 
+
+One weakness of this analysis is that the sample size for military professions was too small to be able to draw any meaningful conclusions. However, this analysis was able to account for age, sex, and work hours as confounders, and found conclusive results for how blue collar and service occupations may increase the odds of occupational injuries. In conclusion, in the 2014 QWL Survey data set, type of occupation was identified as a risk factor associated with experiencing an occupational injury.
 
 
 ```{r submission_instructions, include=FALSE, eval=FALSE}
